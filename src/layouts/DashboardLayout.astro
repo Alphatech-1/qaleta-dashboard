@@ -1,0 +1,246 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+}
+
+const { title = "Sistema Qaleta" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+  <title>{title}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet" />
+</head>
+
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen font-sans antialiased">
+  <div class="flex min-h-screen relative">
+    <!-- Overlay para móvil -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden transition-opacity duration-300"></div>
+    
+    <!-- SIDEBAR MODERNA - Responsive -->
+    <aside id="sidebar" class="fixed md:relative w-72 bg-gradient-to-b from-gray-900 to-gray-800 text-white shadow-2xl flex flex-col z-30 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out h-full">
+      <!-- Logo y título -->
+      <div class="p-6 md:p-8 border-b border-gray-700/50">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <img src="/qaleta.jpg" alt="Logo Qaleta Choripanes" class="w-10 h-10 rounded-full object-cover" />
+            <div>
+              <h1 class="text-xl md:text-2xl font-bold tracking-tight">Qaleta Choripanes</h1>
+              <p class="text-xs text-gray-400 mt-1 hidden sm:block">Sistema de gestión</p>
+            </div>
+          </div>
+          <!-- Botón cerrar sidebar (móvil) -->
+          <button id="closeSidebarBtn" class="md:hidden text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Navegación -->
+      <nav class="flex-1 p-4 md:p-6 space-y-1 md:space-y-2 overflow-y-auto">
+        <a href="/dashboard" class="flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg md:rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200 group">
+          <span class="text-lg md:text-xl">📊</span>
+          <span class="font-medium text-sm md:text-base">Dashboard</span>
+        </a>
+
+        <a href="/ventas" class="flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg md:rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200 group">
+          <span class="text-lg md:text-xl">💰</span>
+          <span class="font-medium text-sm md:text-base">Ventas</span>
+        </a>
+
+        <a href="/gastos" class="flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg md:rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200 group">
+          <span class="text-lg md:text-xl">🧾</span>
+          <span class="font-medium text-sm md:text-base">Gastos</span>
+        </a>
+
+        <a href="/productos" class="flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg md:rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200 group">
+          <span class="text-lg md:text-xl">📦</span>
+          <span class="font-medium text-sm md:text-base">Productos</span>
+        </a>
+        <a href="/reportes" class="flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg md:rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200 group">
+          <span class="text-lg md:text-xl">📈</span>
+          <span class="font-medium text-sm md:text-base">Reportes</span>
+        </a>
+        <!-- SECCIÓN CRÉDITOS -->
+  <div class="pt-4 mt-4 border-t border-gray-700/50">
+    <p class="text-xs text-gray-500 px-3 mb-2">FINANZAS</p>
+    
+    <a href="/clientes" class="flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg md:rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200">
+      <span class="text-lg md:text-xl">👥</span>
+      <span class="font-medium text-sm md:text-base">Clientes</span>
+    </a>
+
+    <a href="/creditos" class="flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg md:rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200">
+      <span class="text-lg md:text-xl">💰</span>
+      <span class="font-medium text-sm md:text-base">Créditos</span>
+    </a>
+
+    <a href="/productos-fiados" class="flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg md:rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200">
+      <span class="text-lg md:text-xl">📦</span>
+      <span class="font-medium text-sm md:text-base">Productos fiados</span>
+    </a>
+  </div>
+      </nav>
+
+      <!-- Footer del sidebar -->
+      <div class="p-4 md:p-6 border-t border-gray-700/50 text-xs text-gray-500">
+        <p>© 2024 Choripanes</p>
+        <p class="mt-1 hidden sm:block">Versión 1.0.0</p>
+      </div>
+    </aside>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="flex-1 overflow-y-auto w-full min-w-0">
+      <!-- Header superior responsive -->
+      <header class="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-10">
+        <div class="px-4 sm:px-6 md:px-8 lg:px-10 py-3 md:py-5">
+          <div class="flex items-center justify-between gap-3">
+            <!-- Botón menú hamburguesa (móvil) -->
+            <button id="menuButton" class="md:hidden text-gray-700 hover:bg-gray-100 p-2 rounded-lg transition-colors">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            </button>
+            
+            <div class="flex-1 min-w-0">
+              <h2 class="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 truncate">{title}</h2>
+              <p class="text-xs sm:text-sm text-gray-500 mt-0.5 md:mt-1 hidden xs:block">Panel de administración</p>
+            </div>
+            
+            <div class="flex items-center gap-2 sm:gap-4">
+              <button class="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 transition-colors text-lg sm:text-xl">
+                🔔
+              </button>
+              <div class="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-4 border-l border-gray-200">
+                <div class="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm">
+                  A
+                </div>
+                <span class="text-xs sm:text-sm font-medium text-gray-700 hidden sm:inline">Administrador</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Contenido dinámico -->
+      <div class="p-3 sm:p-5 md:p-6 lg:p-8 xl:p-10">
+        <slot />
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Elementos
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const menuButton = document.getElementById('menuButton');
+    const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+    
+    // Función para abrir sidebar
+    function openSidebar() {
+      if (sidebar && window.innerWidth < 768) {
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        if (overlay) overlay.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+    }
+    
+    // Función para cerrar sidebar
+    function closeSidebar() {
+      if (sidebar && window.innerWidth < 768) {
+        sidebar.classList.remove('translate-x-0');
+        sidebar.classList.add('-translate-x-full');
+        if (overlay) overlay.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+    }
+    
+    // Event listeners
+    if (menuButton) {
+      menuButton.addEventListener('click', openSidebar);
+    }
+    
+    if (closeSidebarBtn) {
+      closeSidebarBtn.addEventListener('click', closeSidebar);
+    }
+    
+    if (overlay) {
+      overlay.addEventListener('click', closeSidebar);
+    }
+    
+    // Cerrar sidebar al redimensionar a desktop
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768) {
+        if (sidebar) {
+          sidebar.classList.remove('-translate-x-full');
+          sidebar.classList.add('translate-x-0');
+        }
+        if (overlay) overlay.classList.add('hidden');
+        document.body.style.overflow = '';
+      } else {
+        if (sidebar && !sidebar.classList.contains('translate-x-0')) {
+          sidebar.classList.add('-translate-x-full');
+        }
+      }
+    });
+    
+    // Prevenir que el sidebar se vea en desktop al cargar
+    if (window.innerWidth >= 768 && sidebar) {
+      sidebar.classList.remove('-translate-x-full');
+      sidebar.classList.add('translate-x-0');
+    } else if (sidebar) {
+      sidebar.classList.add('-translate-x-full');
+    }
+  </script>
+
+  <style>
+    /* Utilidades personalizadas */
+    @media (min-width: 480px) {
+      .xs\:block {
+        display: block;
+      }
+    }
+    
+    /* Scrollbar personalizada para sidebar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #1f2937;
+      border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #4b5563;
+      border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #6b7280;
+    }
+    
+    /* Smooth scrolling */
+    html {
+      scroll-behavior: smooth;
+    }
+    
+    /* Mejorar experiencia táctil en móvil */
+    @media (max-width: 768px) {
+      button, a {
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+    }
+  </style>
+</body>
+</html>
