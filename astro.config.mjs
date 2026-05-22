@@ -6,37 +6,29 @@ export default defineConfig({
   vite: {
     plugins: [
       tailwind(),
-
       VitePWA({
         registerType: "autoUpdate",
-
         manifest: {
           name: "Qaleta",
           short_name: "Qaleta",
-
-          description:
-            "Sistema de control de ventas y gastos",
-
+          description: "Sistema de control de ventas y gastos",
           theme_color: "#111827",
           background_color: "#111827",
-
           display: "standalone",
-          start_url: "/dashboard.astro",
-
+          start_url: "/dashboard",
           icons: [
             {
-              src: "/qaleta.jpg",
+              src: "/icon-192.png",
               sizes: "192x192",
-              type: "image/jpg",
+              type: "image/png",
             },
             {
-              src: "/qaleta.jpg",
+              src: "/icon-512.png",
               sizes: "512x512",
-              type: "image/jpg",
+              type: "image/png",
             },
           ],
         },
-
         devOptions: {
           enabled: true,
         },
