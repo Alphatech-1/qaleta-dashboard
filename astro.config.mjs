@@ -4,8 +4,8 @@ import { VitePWA } from "vite-plugin-pwa";
 import vercel from "@astrojs/vercel";
 
 export default defineConfig({
-  output: "server",           // ← Indica que usas SSR
-  adapter: vercel(),          // ← Adaptador para Vercel
+  output: "server",
+  adapter: vercel(),
   vite: {
     plugins: [
       tailwind(),

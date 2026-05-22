@@ -1,5 +1,5 @@
-import { x as typeHandlers, y as types, A as AstroError, N as NoImageMetadata, n as isRemoteAllowed, F as FailedToFetchRemoteImageDimensions, R as RemoteImageNotAllowed, r as removeQueryString, p as joinPaths, E as ExpectedImage, o as isRemotePath, L as LocalImageUsedWrongly, h as MissingImageDimension, j as UnsupportedImageFormat, e as IncompatibleDescriptorOptions, U as UnsupportedImageConversion, g as InvalidImageService, a as ExpectedImageOptions, b as ExpectedNotESMImage, I as ImageMissingAlt, q as maybeRenderHead, k as addAttribute, w as spreadAttributes, v as renderTemplate, c as FontFamilyNotFound, z as unescapeHTML, M as MissingGetFontFileRequestUrl } from './entrypoint_BoMskoFd.mjs';
-import { c as createComponent } from './astro-component_Bz1idbRS.mjs';
+import { x as typeHandlers, y as types, A as AstroError, N as NoImageMetadata, n as isRemoteAllowed, F as FailedToFetchRemoteImageDimensions, R as RemoteImageNotAllowed, r as removeQueryString, p as joinPaths, E as ExpectedImage, o as isRemotePath, L as LocalImageUsedWrongly, h as MissingImageDimension, j as UnsupportedImageFormat, e as IncompatibleDescriptorOptions, U as UnsupportedImageConversion, g as InvalidImageService, a as ExpectedImageOptions, b as ExpectedNotESMImage, I as ImageMissingAlt, q as maybeRenderHead, k as addAttribute, w as spreadAttributes, v as renderTemplate, c as FontFamilyNotFound, z as unescapeHTML, M as MissingGetFontFileRequestUrl } from './entrypoint_5kZAInLD.mjs';
+import { c as createComponent } from './astro-component_DyxCdPd6.mjs';
 import 'clsx';
 import * as mime from 'mrmime';
 import 'piccolore';
@@ -617,7 +617,7 @@ async function getConfiguredImageService() {
   if (!globalThis?.astroAsset?.imageService) {
     const { default: service } = await import(
       // @ts-expect-error
-      './sharp_DRO96kuW.mjs'
+      './sharp_DRzVmOi8.mjs'
     ).catch((e) => {
       const error = new AstroError(InvalidImageService);
       error.cause = e;

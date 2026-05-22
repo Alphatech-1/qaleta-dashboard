@@ -1,7 +1,7 @@
-import { c as createComponent } from './astro-component_Bz1idbRS.mjs';
+import { c as createComponent } from './astro-component_DyxCdPd6.mjs';
 import 'piccolore';
-import { s as renderComponent, v as renderTemplate, q as maybeRenderHead, k as addAttribute } from './entrypoint_BoMskoFd.mjs';
-import { $ as $$DashboardLayout } from './DashboardLayout_BQnVw-Qk.mjs';
+import { s as renderComponent, v as renderTemplate, q as maybeRenderHead, k as addAttribute } from './entrypoint_5kZAInLD.mjs';
+import { $ as $$DashboardLayout } from './DashboardLayout_FDUS06cx.mjs';
 import { s as supabase } from './supabase_BBuPOtL-.mjs';
 
 const prerender = false;
