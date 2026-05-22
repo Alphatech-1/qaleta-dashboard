@@ -1,11 +1,11 @@
 import { defineConfig } from "astro/config";
 import tailwind from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
-import vercel from "@astrojs/vercel";
+import netlify from '@astrojs/netlify'; // <- Cambia 'vercel' por 'netlify'
 
 export default defineConfig({
   output: "server",
-  adapter: vercel(),
+  adapter: netlify(),
   vite: {
     plugins: [
       tailwind(),
