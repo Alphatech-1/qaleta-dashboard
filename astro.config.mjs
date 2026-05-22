@@ -20,16 +20,8 @@ export default defineConfig({
           display: "standalone",
           start_url: "/dashboard",
           icons: [
-            {
-              src: "/icon-192.png",
-              sizes: "192x192",
-              type: "image/png",
-            },
-            {
-              src: "/icon-512.png",
-              sizes: "512x512",
-              type: "image/png",
-            },
+            { src: "/qaleta.jpg", sizes: "192x192", type: "image/jpg" },
+            { src: "/qaleta.jpg", sizes: "512x512", type: "image/jpg" },
           ],
         },
         devOptions: {
