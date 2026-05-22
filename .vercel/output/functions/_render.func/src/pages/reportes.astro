@@ -1,0 +1,412 @@
+---
+import Layout from "../layouts/DashboardLayout.astro";
+import { supabase } from "../lib/supabase";
+
+const hoy = new Date().toISOString().split("T")[0];
+
+const inicioMes = new Date(
+  new Date().getFullYear(),
+  new Date().getMonth(),
+  1
+).toISOString().split("T")[0];
+
+// CONSULTAS EN PARALELO
+const [{ data: ventas }, { data: gastos }] = await Promise.all([
+  supabase.from("ventas").select("*"),
+  supabase.from("gastos").select("*")
+]);
+
+// VENTAS HOY
+const ventasHoy = ventas?.filter((v) => v.fecha === hoy) || [];
+const gastosHoy = gastos?.filter((g) => g.fecha === hoy) || [];
+
+// MES
+const ventasMes = ventas?.filter((v) => v.fecha >= inicioMes) || [];
+const gastosMes = gastos?.filter((g) => g.fecha >= inicioMes) || [];
+
+// TOTALES
+const totalVentasHoy = ventasHoy.reduce((acc, v) => acc + Number(v.total), 0);
+const totalGastosHoy = gastosHoy.reduce((acc, g) => acc + Number(g.monto), 0);
+const gananciaHoy = totalVentasHoy - totalGastosHoy;
+
+const totalVentasMes = ventasMes.reduce((acc, v) => acc + Number(v.total), 0);
+const totalGastosMes = gastosMes.reduce((acc, g) => acc + Number(g.monto), 0);
+const gananciaMes = totalVentasMes - totalGastosMes;
+
+// MARGEN DE GANANCIA
+const margenGananciaMes = totalVentasMes > 0 ? (gananciaMes / totalVentasMes) * 100 : 0;
+const margenGananciaHoy = totalVentasHoy > 0 ? (gananciaHoy / totalVentasHoy) * 100 : 0;
+
+// PRODUCTOS MÁS VENDIDOS
+const productosMap = {};
+ventasMes.forEach((venta) => {
+  const nombre = venta.producto;
+  if (!productosMap[nombre]) {
+    productosMap[nombre] = 0;
+  }
+  productosMap[nombre] += venta.cantidad;
+});
+
+const topProductos = Object.entries(productosMap)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 5);
+
+// VENTAS POR DÍA DEL MES (últimos 7 días)
+const ultimos7Dias = [];
+for (let i = 6; i >= 0; i--) {
+  const fecha = new Date();
+  fecha.setDate(fecha.getDate() - i);
+  const fechaStr = fecha.toISOString().split("T")[0];
+  const ventasDia = ventas?.filter((v) => v.fecha === fechaStr) || [];
+  const totalDia = ventasDia.reduce((acc, v) => acc + Number(v.total), 0);
+  ultimos7Dias.push({
+    fecha: fechaStr,
+    dia: fecha.toLocaleDateString('es-PE', { weekday: 'short' }),
+    total: totalDia
+  });
+}
+
+// GASTOS POR CATEGORÍA
+const gastosPorCategoria = {};
+gastosMes.forEach((gasto) => {
+  const categoria = gasto.categoria;
+  if (!gastosPorCategoria[categoria]) {
+    gastosPorCategoria[categoria] = 0;
+  }
+  gastosPorCategoria[categoria] += Number(gasto.monto);
+});
+
+const topCategorias = Object.entries(gastosPorCategoria)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 5);
+
+// TOTAL DE VENTAS (cantidad de productos)
+const totalProductosVendidos = ventasMes.reduce((acc, v) => acc + v.cantidad, 0);
+
+// TICKET PROMEDIO
+const ticketPromedio = ventasMes.length > 0 ? totalVentasMes / ventasMes.length : 0;
+
+// CATEGORÍAS CON ICONOS Y COLORES
+const categoriaIconos = {
+  "Insumos": { icono: "🥩", color: "bg-orange-500" },
+  "Gas": { icono: "🔥", color: "bg-red-500" },
+  "Bebidas": { icono: "🥤", color: "bg-blue-500" },
+  "Personal": { icono: "👥", color: "bg-purple-500" },
+  "Publicidad": { icono: "📢", color: "bg-pink-500" },
+  "Otros": { icono: "📦", color: "bg-gray-500" }
+};
+
+// NOMBRE DEL MES
+const nombreMes = new Date().toLocaleDateString('es-PE', { month: 'long' });
+const anioActual = new Date().getFullYear();
+---
+
+<Layout title="Reportes">
+  <div class="space-y-6 sm:space-y-8">
+    <!-- Encabezado -->
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">📈 Reportes y análisis</h1>
+      <p class="text-sm sm:text-base text-gray-600">Visualiza el rendimiento de tu negocio</p>
+      <p class="text-xs text-gray-500 mt-2">{nombreMes} {anioActual}</p>
+    </div>
+
+    <!-- Cards de resumen -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      <!-- Ventas Hoy -->
+      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-white shadow-lg hover:shadow-xl transition-all">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-sm opacity-90">Ventas hoy</p>
+          <span class="text-2xl">💰</span>
+        </div>
+        <h2 class="text-xl sm:text-2xl font-bold">S/ {totalVentasHoy.toFixed(2)}</h2>
+        <p class="text-xs opacity-75 mt-2">{ventasHoy.length} transacciones</p>
+      </div>
+
+      <!-- Gastos Hoy -->
+      <div class="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-white shadow-lg hover:shadow-xl transition-all">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-sm opacity-90">Gastos hoy</p>
+          <span class="text-2xl">🧾</span>
+        </div>
+        <h2 class="text-xl sm:text-2xl font-bold">S/ {totalGastosHoy.toFixed(2)}</h2>
+        <p class="text-xs opacity-75 mt-2">{gastosHoy.length} gastos</p>
+      </div>
+
+      <!-- Ganancia Hoy -->
+      <div class={`bg-gradient-to-br rounded-xl sm:rounded-2xl p-4 sm:p-5 text-white shadow-lg hover:shadow-xl transition-all ${gananciaHoy >= 0 ? 'from-blue-500 to-indigo-600' : 'from-orange-500 to-red-600'}`}>
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-sm opacity-90">Ganancia hoy</p>
+          <span class="text-2xl">📈</span>
+        </div>
+        <h2 class="text-xl sm:text-2xl font-bold">S/ {gananciaHoy.toFixed(2)}</h2>
+        <p class="text-xs opacity-75 mt-2">Margen: {margenGananciaHoy.toFixed(1)}%</p>
+      </div>
+
+      <!-- Ticket Promedio -->
+      <div class="bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-white shadow-lg hover:shadow-xl transition-all">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-sm opacity-90">Ticket promedio</p>
+          <span class="text-2xl">🎫</span>
+        </div>
+        <h2 class="text-xl sm:text-2xl font-bold">S/ {ticketPromedio.toFixed(2)}</h2>
+        <p class="text-xs opacity-75 mt-2">Por venta</p>
+      </div>
+    </div>
+
+    <!-- Resumen del mes -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <!-- Ventas del mes -->
+      <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft p-5 sm:p-6 border border-gray-100">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-gray-500 text-sm">Ventas del mes</p>
+            <h3 class="text-2xl font-bold text-gray-800">S/ {totalVentasMes.toFixed(2)}</h3>
+          </div>
+          <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+            <span class="text-2xl">💰</span>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div class="h-full bg-green-500 rounded-full" style="width: 75%"></div>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">{ventasMes.length} ventas realizadas</p>
+        </div>
+      </div>
+
+      <!-- Gastos del mes -->
+      <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft p-5 sm:p-6 border border-gray-100">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-gray-500 text-sm">Gastos del mes</p>
+            <h3 class="text-2xl font-bold text-gray-800">S/ {totalGastosMes.toFixed(2)}</h3>
+          </div>
+          <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+            <span class="text-2xl">🧾</span>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div class="h-full bg-red-500 rounded-full" style="width: 60%"></div>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">{gastosMes.length} gastos registrados</p>
+        </div>
+      </div>
+
+      <!-- Ganancia del mes -->
+      <div className={`bg-white rounded-xl sm:rounded-2xl shadow-soft p-5 sm:p-6 border ${gananciaMes >= 0 ? 'border-green-200' : 'border-red-200'}`}>
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-gray-500 text-sm">Ganancia neta del mes</p>
+            <h3 className={`text-2xl font-bold ${gananciaMes >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              S/ {gananciaMes.toFixed(2)}
+            </h3>
+          </div>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${gananciaMes >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+            <span class="text-2xl">📊</span>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="flex justify-between text-sm mb-1">
+            <span>Margen de ganancia</span>
+            <span className={`font-semibold ${margenGananciaMes >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {margenGananciaMes.toFixed(1)}%
+            </span>
+          </div>
+          <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${margenGananciaMes >= 0 ? 'bg-green-500' : 'bg-red-500'}`} 
+                 style={{ width: `${Math.min(Math.abs(margenGananciaMes), 100)}%` }}></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráfico de ventas últimos 7 días -->
+    <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft p-5 sm:p-6 border border-gray-100">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-lg sm:text-xl font-bold text-gray-800">📊 Ventas últimos 7 días</h2>
+          <p class="text-xs text-gray-500 mt-1">Evolución diaria de ventas</p>
+        </div>
+        <span class="text-2xl">📈</span>
+      </div>
+      
+      <div class="flex items-end justify-between gap-2 sm:gap-4 h-48 sm:h-56">
+        {ultimos7Dias.map((dia) => {
+          const maxVenta = Math.max(...ultimos7Dias.map(d => d.total), 1);
+          const altura = (dia.total / maxVenta) * 100;
+          return (
+            <div key={dia.fecha} class="flex-1 flex flex-col items-center gap-2">
+              <div class="w-full bg-green-100 rounded-lg overflow-hidden" style="height: 100px;">
+                <div class="bg-green-500 transition-all duration-500 rounded-lg" style="height: ${altura}%; width: 100%;"></div>
+              </div>
+              <div class="text-center">
+                <p class="text-xs sm:text-sm font-semibold text-gray-700">{dia.dia}</p>
+                <p class="text-[10px] sm:text-xs text-gray-500">S/{dia.total.toFixed(0)}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    <!-- Top Productos y Top Gastos -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <!-- Productos más vendidos -->
+      <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft border border-gray-100 overflow-hidden">
+        <div class="px-5 sm:px-6 py-4 bg-gradient-to-r from-orange-50 to-amber-50 border-b border-gray-200">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">🌭</span>
+            <h2 class="text-lg sm:text-xl font-bold text-gray-800">Top productos más vendidos</h2>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Total de productos: {totalProductosVendidos} unidades</p>
+        </div>
+        
+        <div class="divide-y divide-gray-100">
+          {topProductos.length === 0 ? (
+            <div class="p-8 text-center text-gray-500">
+              <div class="text-4xl mb-2">📭</div>
+              <p>No hay ventas registradas este mes</p>
+            </div>
+          ) : (
+            topProductos.map((producto, index) => {
+              const porcentaje = (producto[1] / totalProductosVendidos) * 100;
+              return (
+                <div key={producto[0]} class="p-4 sm:p-5 hover:bg-gray-50 transition-colors">
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-3">
+                      <div class={`w-7 h-7 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                        index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-600' : 'bg-gray-300'
+                      }`}>
+                        #{index + 1}
+                      </div>
+                      <span class="font-semibold text-gray-800">{producto[0]}</span>
+                    </div>
+                    <span class="text-lg font-bold text-green-600">{producto[1]} uds.</span>
+                  </div>
+                  <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full" style="width: ${porcentaje}%"></div>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">{porcentaje.toFixed(1)}% del total</p>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      <!-- Gastos por categoría -->
+      <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft border border-gray-100 overflow-hidden">
+        <div class="px-5 sm:px-6 py-4 bg-gradient-to-r from-red-50 to-rose-50 border-b border-gray-200">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">📊</span>
+            <h2 class="text-lg sm:text-xl font-bold text-gray-800">Distribución de gastos</h2>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Por categoría este mes</p>
+        </div>
+        
+        <div class="divide-y divide-gray-100">
+          {topCategorias.length === 0 ? (
+            <div class="p-8 text-center text-gray-500">
+              <div class="text-4xl mb-2">📭</div>
+              <p>No hay gastos registrados este mes</p>
+            </div>
+          ) : (
+            topCategorias.map(([categoria, monto]) => {
+              const porcentaje = (monto / totalGastosMes) * 100;
+              const { icono, color } = categoriaIconos[categoria] || { icono: "📦", color: "bg-gray-500" };
+              return (
+                <div key={categoria} class="p-4 sm:p-5 hover:bg-gray-50 transition-colors">
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-3">
+                      <div className={`w-8 h-8 ${color} rounded-lg flex items-center justify-center text-white`}>
+                        <span>{icono}</span>
+                      </div>
+                      <span class="font-semibold text-gray-800">{categoria}</span>
+                    </div>
+                    <span class="text-base sm:text-lg font-bold text-red-600">S/ {monto.toFixed(2)}</span>
+                  </div>
+                  <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${color.replace('bg', 'bg')}`} style="width: ${porcentaje}%"></div>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">{porcentaje.toFixed(1)}% del total</p>
+                </div>
+              );
+            })
+          )}
+        </div>
+        
+        {topCategorias.length > 0 && (
+          <div class="px-5 sm:px-6 py-3 bg-gray-50 border-t border-gray-200">
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-semibold text-gray-700">Total gastos</span>
+              <span class="text-lg font-bold text-red-600">S/ {totalGastosMes.toFixed(2)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- Indicadores clave de rendimiento -->
+    <div class="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl sm:rounded-2xl p-5 sm:p-6 text-white">
+      <h3 class="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2">
+        <span>🎯</span> KPIs del negocio
+      </h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+        <div class="text-center">
+          <div class="text-2xl sm:text-3xl mb-2">💰</div>
+          <p class="text-sm font-semibold">Eficiencia</p>
+          <p class="text-lg sm:text-xl font-bold text-green-400">{margenGananciaMes.toFixed(1)}%</p>
+          <p class="text-xs opacity-75">Margen de ganancia</p>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl sm:text-3xl mb-2">📊</div>
+          <p class="text-sm font-semibold">Rentabilidad</p>
+          <p class="text-lg sm:text-xl font-bold text-blue-400">S/ {(gananciaMes / (totalGastosMes || 1)).toFixed(2)}</p>
+          <p class="text-xs opacity-75">Ganancia por gasto</p>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl sm:text-3xl mb-2">🎫</div>
+          <p class="text-sm font-semibold">Ticket medio</p>
+          <p class="text-lg sm:text-xl font-bold text-purple-400">S/ {ticketPromedio.toFixed(2)}</p>
+          <p class="text-xs opacity-75">Por transacción</p>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl sm:text-3xl mb-2">📈</div>
+          <p class="text-sm font-semibold">Volumen</p>
+          <p class="text-lg sm:text-xl font-bold text-orange-400">{totalProductosVendidos}</p>
+          <p class="text-xs opacity-75">Productos vendidos</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  /* Animaciones */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .space-y-6 > *,
+  .space-y-8 > * {
+    animation: fadeInUp 0.4s ease-out;
+  }
+  
+  .grid > * {
+    animation: fadeInUp 0.4s ease-out backwards;
+  }
+  
+  /* Delay para cards */
+  .grid > *:nth-child(1) { animation-delay: 0.05s; }
+  .grid > *:nth-child(2) { animation-delay: 0.1s; }
+  .grid > *:nth-child(3) { animation-delay: 0.15s; }
+  .grid > *:nth-child(4) { animation-delay: 0.2s; }
+</style>
