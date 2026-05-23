@@ -17,7 +17,17 @@ const { data: clientes } = await supabase
 
 let mensaje = "";
 
-const editId = Astro.url.searchParams.get("edit");
+// Obtener parámetros de filtro desde la URL
+const urlParams = Astro.url.searchParams;
+const filterFechaDesde = urlParams.get("fecha_desde") || "";
+const filterFechaHasta = urlParams.get("fecha_hasta") || "";
+const filterProducto = urlParams.get("producto") || "";
+const filterTipoPago = urlParams.get("tipo_pago") || "";
+const filterMontoMin = urlParams.get("monto_min") || "";
+const filterMontoMax = urlParams.get("monto_max") || "";
+const filterCliente = urlParams.get("cliente_id") || "";
+
+const editId = urlParams.get("edit");
 let ventaEditar = null;
 
 if (editId) {
@@ -116,10 +126,44 @@ if (Astro.request.method === "POST") {
   }
 }
 
-const { data: ventas } = await supabase
-  .from("ventas")
-  .select("*")
-  .order("fecha", { ascending: false });
+// Construir consulta con filtros
+let query = supabase.from("ventas").select("*");
+
+// Aplicar filtros
+if (filterFechaDesde) {
+  query = query.gte("fecha", filterFechaDesde);
+}
+if (filterFechaHasta) {
+  query = query.lte("fecha", filterFechaHasta);
+}
+if (filterProducto) {
+  query = query.eq("producto", filterProducto);
+}
+if (filterTipoPago) {
+  query = query.eq("tipo_pago", filterTipoPago);
+}
+if (filterMontoMin) {
+  query = query.gte("total", parseFloat(filterMontoMin));
+}
+if (filterMontoMax) {
+  query = query.lte("total", parseFloat(filterMontoMax));
+}
+if (filterCliente) {
+  query = query.eq("cliente_id", parseInt(filterCliente));
+}
+
+// Ordenar por fecha
+query = query.order("fecha", { ascending: false });
+
+const { data: ventas } = await query;
+
+// Obtener lista única de productos para el filtro
+const productosUnicos = [...new Set(ventas?.map(v => v.producto) || [])];
+
+// Función para limpiar filtros
+const limpiarFiltros = () => {
+  return Astro.redirect("/ventas");
+};
 ---
 
 <Layout title="Ventas">
@@ -130,7 +174,161 @@ const { data: ventas } = await supabase
       <p class="text-sm sm:text-base text-gray-600">Gestiona todas las ventas de choripanes</p>
     </div>
 
-    <!-- Formulario de ventas -->
+    <!-- PANEL DE FILTROS -->
+    <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft p-4 sm:p-6 border border-gray-100">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🔍</span>
+          <h3 class="text-lg font-bold text-gray-800">Filtrar ventas</h3>
+        </div>
+        {(filterFechaDesde || filterFechaHasta || filterProducto || filterTipoPago || filterMontoMin || filterMontoMax || filterCliente) && (
+          <a href="/ventas" class="text-sm text-green-600 hover:text-green-700 font-semibold flex items-center gap-1">
+            <span>✖️</span> Limpiar filtros
+          </a>
+        )}
+      </div>
+
+      <form method="GET" class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Filtro por rango de fechas -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              📅 Desde
+            </label>
+            <input
+              type="date"
+              name="fecha_desde"
+              value={filterFechaDesde}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all outline-none"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              📅 Hasta
+            </label>
+            <input
+              type="date"
+              name="fecha_hasta"
+              value={filterFechaHasta}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all outline-none"
+            />
+          </div>
+
+          <!-- Filtro por producto -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              🥩 Producto
+            </label>
+            <select
+              name="producto"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all outline-none bg-white"
+            >
+              <option value="">Todos los productos</option>
+              {productos?.map((producto) => (
+                <option 
+                  key={producto.id} 
+                  value={producto.nombre}
+                  selected={filterProducto === producto.nombre}
+                >
+                  {producto.nombre}
+                </option>
+              ))}
+              {/* Si hay productos en ventas que no están en la tabla productos */}
+              {productosUnicos.filter(p => !productos?.some(prod => prod.nombre === p)).map(p => (
+                <option key={p} value={p} selected={filterProducto === p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Filtro por tipo de pago -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              💳 Tipo de pago
+            </label>
+            <select
+              name="tipo_pago"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all outline-none bg-white"
+            >
+              <option value="">Todos</option>
+              <option value="efectivo" selected={filterTipoPago === "efectivo"}>💵 Efectivo</option>
+              <option value="credito" selected={filterTipoPago === "credito"}>📝 Crédito</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Filtro por rango de montos -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              💲 Monto mínimo (S/)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              name="monto_min"
+              placeholder="0.00"
+              value={filterMontoMin}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all outline-none"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              💲 Monto máximo (S/)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              name="monto_max"
+              placeholder="99999.99"
+              value={filterMontoMax}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all outline-none"
+            />
+          </div>
+
+          <!-- Filtro por cliente (solo para créditos) -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              👤 Cliente
+            </label>
+            <select
+              name="cliente_id"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all outline-none bg-white"
+            >
+              <option value="">Todos los clientes</option>
+              {clientes?.map((cliente) => (
+                <option 
+                  key={cliente.id} 
+                  value={cliente.id}
+                  selected={filterCliente === String(cliente.id)}
+                >
+                  {cliente.nombre} {cliente.telefono ? `- ${cliente.telefono}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Botones de acción -->
+          <div class="flex gap-3 items-end">
+            <button
+              type="submit"
+              class="flex-1 px-6 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all shadow-md"
+            >
+              🔍 Aplicar filtros
+            </button>
+            
+            {ventas && ventas.length > 0 && (
+              <span class="px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg text-sm whitespace-nowrap">
+                📊 {ventas.length} resultado(s)
+              </span>
+            )}
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Formulario de ventas (igual que antes) -->
     <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft p-4 sm:p-6 md:p-8 border border-gray-100">
       <div class="flex items-center gap-3 mb-4 sm:mb-6">
         <div class={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center ${
@@ -319,13 +517,18 @@ const { data: ventas } = await supabase
       </form>
     </div>
 
-    <!-- Tabla de ventas -->
+    <!-- Tabla de ventas filtradas -->
     <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft border border-gray-100 overflow-hidden">
       <div class="px-4 sm:px-6 md:px-8 py-4 sm:py-6 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 class="text-xl sm:text-2xl font-bold text-gray-800">📋 Historial de ventas</h2>
-            <p class="text-xs sm:text-sm text-gray-500 mt-1">Total de registros: {ventas?.length || 0}</p>
+            <p class="text-xs sm:text-sm text-gray-500 mt-1">
+              Mostrando {ventas?.length || 0} de {ventas?.length || 0} registros
+              {(filterFechaDesde || filterFechaHasta || filterProducto || filterTipoPago || filterMontoMin || filterMontoMax || filterCliente) && (
+                <span class="text-green-600"> (filtrado)</span>
+              )}
+            </p>
           </div>
           <div class="flex gap-2">
             <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">💵 Efectivo</span>
@@ -352,9 +555,14 @@ const { data: ventas } = await supabase
             {ventas?.length === 0 ? (
               <tr>
                 <td colspan="7" class="px-6 py-12 text-center text-gray-500">
-                  <div class="text-6xl mb-3">📭</div>
-                  <p class="text-lg">No hay ventas registradas</p>
-                  <p class="text-sm">Comienza agregando tu primera venta</p>
+                  <div class="text-6xl mb-3">🔍</div>
+                  <p class="text-lg">No se encontraron ventas</p>
+                  <p class="text-sm">Intenta con otros filtros o agrega una nueva venta</p>
+                  {(filterFechaDesde || filterFechaHasta || filterProducto || filterTipoPago || filterMontoMin || filterMontoMax || filterCliente) && (
+                    <a href="/ventas" class="inline-block mt-3 text-sm text-green-600 hover:underline">
+                      Limpiar filtros →
+                    </a>
+                  )}
                 </td>
               </tr>
             ) : (
@@ -450,9 +658,9 @@ const { data: ventas } = await supabase
       <div class="md:hidden divide-y divide-gray-100">
         {ventas?.length === 0 ? (
           <div class="px-6 py-12 text-center text-gray-500">
-            <div class="text-6xl mb-3">📭</div>
-            <p class="text-lg">No hay ventas registradas</p>
-            <p class="text-sm">Comienza agregando tu primera venta</p>
+            <div class="text-6xl mb-3">🔍</div>
+            <p class="text-lg">No se encontraron ventas</p>
+            <p class="text-sm">Intenta con otros filtros</p>
           </div>
         ) : (
           ventas?.map((venta) => (
@@ -486,6 +694,12 @@ const { data: ventas } = await supabase
                   <p class="font-semibold text-gray-800">S/ {venta.precio.toFixed(2)}</p>
                 </div>
               </div>
+              
+              {venta.tipo_pago === 'credito' && venta.cliente_id && (
+                <div class="mt-2 text-xs text-gray-500">
+                  👤 Cliente: {clientes?.find(c => c.id === venta.cliente_id)?.nombre || 'N/A'}
+                </div>
+              )}
               
               <div class="flex gap-2 mt-4">
                 <form method="GET" class="flex-1">
