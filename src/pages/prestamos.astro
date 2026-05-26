@@ -36,6 +36,36 @@ if (Astro.request.method === "POST") {
     return Astro.redirect(`/prestamos?cliente=${clienteId}`);
   }
 
+  // Eliminar préstamo (también eliminar el gasto asociado)
+if (deleteId) {
+  // Primero, obtener el préstamo para saber el monto y fecha
+  const { data: prestamo } = await supabase
+    .from("prestamos")
+    .select("*")
+    .eq("id", deleteId)
+    .single();
+  
+  if (prestamo) {
+    // Buscar y eliminar el gasto asociado
+    await supabase
+      .from("gastos")
+      .delete()
+      .eq("descripcion", `Préstamo otorgado a ${cliente?.nombre}`)
+      .eq("monto", prestamo.monto_prestado)
+      .eq("categoria", "Prestamos");
+    
+    // También eliminar pagos del préstamo si existen
+    await supabase
+      .from("pagos_prestamos")
+      .delete()
+      .eq("prestamo_id", deleteId);
+  }
+  
+  // Finalmente eliminar el préstamo
+  await supabase.from("prestamos").delete().eq("id", deleteId);
+  return Astro.redirect(`/prestamos?cliente=${clienteId}`);
+}
+
   // Registrar pago de préstamo (ESTE SÍ AFECTA CAJA - entra dinero)
   if (pagoId) {
     const monto = Number(formData.get("monto"));
@@ -143,6 +173,8 @@ const totalPrestado = prestamos?.reduce((sum, p) => sum + p.monto_prestado, 0) |
 const totalPagado = prestamos?.reduce((sum, p) => sum + (p.monto_prestado - p.saldo_pendiente), 0) || 0;
 const totalPendiente = prestamos?.reduce((sum, p) => sum + p.saldo_pendiente, 0) || 0;
 ---
+
+
 
 <Layout title={cliente ? `Préstamos - ${cliente.nombre}` : "Préstamos"}>
   <div class="space-y-6 sm:space-y-8">
