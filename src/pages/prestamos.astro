@@ -36,7 +36,7 @@ if (Astro.request.method === "POST") {
     return Astro.redirect(`/prestamos?cliente=${clienteId}`);
   }
 
-  // Registrar pago de préstamo (ESTE SÍ AFECTA CAJA)
+  // Registrar pago de préstamo (ESTE SÍ AFECTA CAJA - entra dinero)
   if (pagoId) {
     const monto = Number(formData.get("monto"));
     const fecha = formData.get("fecha")?.toString();
@@ -46,39 +46,34 @@ if (Astro.request.method === "POST") {
     const { data: prestamo } = await supabase.from("prestamos").select("*").eq("id", pagoId).single();
     
     if (prestamo) {
-      const nuevoPagado = prestamo.monto_prestado - prestamo.saldo_pendiente + monto;
       const nuevoSaldo = prestamo.saldo_pendiente - monto;
       const nuevoEstado = nuevoSaldo <= 0 ? "pagado" : "parcial";
       
       // 1. Insertar pago en pagos_prestamos
-      const { error: pagoError } = await supabase.from("pagos_prestamos").insert([{
+      await supabase.from("pagos_prestamos").insert([{
         prestamo_id: pagoId,
         fecha,
         monto,
         metodo_pago: metodoPago
       }]);
       
-      if (pagoError) {
-        mensaje = "Error al registrar pago: " + pagoError.message;
-      } else {
-        // 2. Actualizar préstamo
-        await supabase.from("prestamos").update({
-          saldo_pendiente: nuevoSaldo,
-          estado: nuevoEstado
-        }).eq("id", pagoId);
-        
-        // 3. IMPORTANTE: Registrar en VENTAS como ingreso en efectivo (ESTE SÍ AFECTA DASHBOARD)
-        await supabase.from("ventas").insert([{
-          fecha: fecha,
-          producto: `PAGO PRÉSTAMO - ${cliente?.nombre || 'Cliente'}`,
-          cantidad: 1,
-          precio: monto,
-          total: monto,
-          tipo_pago: "efectivo",
-          cliente_id: prestamo.cliente_id,
-          es_pago_prestamo: true
-        }]);
-      }
+      // 2. Actualizar préstamo
+      await supabase.from("prestamos").update({
+        saldo_pendiente: nuevoSaldo,
+        estado: nuevoEstado
+      }).eq("id", pagoId);
+      
+      // 3. Registrar en VENTAS como ingreso en efectivo (afecta dashboard)
+      await supabase.from("ventas").insert([{
+        fecha: fecha,
+        producto: `PAGO PRÉSTAMO - ${cliente?.nombre}`,
+        cantidad: 1,
+        precio: monto,
+        total: monto,
+        tipo_pago: "efectivo",
+        cliente_id: prestamo.cliente_id,
+        es_pago_prestamo: true
+      }]);
     }
     return Astro.redirect(`/prestamos?cliente=${clienteId}`);
   }
@@ -86,20 +81,21 @@ if (Astro.request.method === "POST") {
   // Editar préstamo
   if (updateId) {
     const montoPrestado = Number(formData.get("monto_prestado"));
-    const saldoPendiente = montoPrestado - (prestamoEditar?.monto_prestado - prestamoEditar?.saldo_pendiente || 0);
+    const pagadoActual = prestamoEditar?.monto_prestado - prestamoEditar?.saldo_pendiente;
+    const nuevoSaldo = montoPrestado - pagadoActual;
     
     await supabase.from("prestamos").update({
       fecha: formData.get("fecha")?.toString(),
       monto_prestado: montoPrestado,
-      saldo_pendiente: saldoPendiente,
+      saldo_pendiente: nuevoSaldo,
       tasa_interes: Number(formData.get("tasa_interes")),
       fecha_vencimiento: formData.get("fecha_vencimiento") || null,
-      estado: saldoPendiente <= 0 ? "pagado" : saldoPendiente < montoPrestado ? "parcial" : "pendiente"
+      estado: nuevoSaldo <= 0 ? "pagado" : nuevoSaldo < montoPrestado ? "parcial" : "pendiente"
     }).eq("id", updateId);
     return Astro.redirect(`/prestamos?cliente=${clienteId}`);
   }
 
-  // Crear nuevo préstamo (ESTE SÍ AFECTA CAJA - SALE DINERO)
+  // Crear nuevo préstamo (ESTE SÍ AFECTA CAJA - sale dinero)
   const montoPrestado = Number(formData.get("monto_prestado"));
   const tasaInteres = Number(formData.get("tasa_interes")) || 0;
   const fechaVencimiento = formData.get("fecha_vencimiento") || null;
@@ -117,7 +113,7 @@ if (Astro.request.method === "POST") {
   if (prestamoError) {
     mensaje = "Error al crear préstamo: " + prestamoError.message;
   } else {
-    // IMPORTANTE: Registrar un GASTO (salida de dinero) ya que el préstamo es dinero que sale de caja
+    // IMPORTANTE: Registrar un GASTO (salida de dinero) porque el préstamo es dinero que sale de caja
     await supabase.from("gastos").insert([{
       fecha: formData.get("fecha")?.toString(),
       categoria: "Prestamos",
@@ -138,7 +134,7 @@ const { data: prestamos } = clienteId ? await supabase
 // Obtener pagos de préstamos
 const { data: pagos } = clienteId ? await supabase
   .from("pagos_prestamos")
-  .select("*, prestamos(*)")
+  .select("*")
   .in("prestamo_id", prestamos?.map(p => p.id) || [])
   .order("fecha", { ascending: false }) : { data: [] };
 
@@ -154,7 +150,7 @@ const totalPendiente = prestamos?.reduce((sum, p) => sum + p.saldo_pendiente, 0)
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
         <div class="flex items-center gap-2">
-          <a href="/clientes" class="text-blue-600 hover:text-blue-700">← Volver</a>
+          <a href="/clientes" class="text-blue-600 hover:text-blue-700">← Volver a clientes</a>
           <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">🏦 Préstamos</h1>
         </div>
         {cliente && (
@@ -193,7 +189,7 @@ const totalPendiente = prestamos?.reduce((sum, p) => sum + p.saldo_pendiente, 0)
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">📅 Fecha</label>
-                <input type="date" name="fecha" required value={prestamoEditar?.fecha} class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+                <input type="date" name="fecha" required value={prestamoEditar?.fecha || new Date().toISOString().split('T')[0]} class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
               </div>
               <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">💰 Monto prestado</label>
@@ -219,10 +215,16 @@ const totalPendiente = prestamos?.reduce((sum, p) => sum + p.saldo_pendiente, 0)
               </p>
             </div>
             
-            <button type="submit" class="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all">
-              {prestamoEditar ? "✓ Actualizar préstamo" : "✓ Otorgar préstamo"}
-            </button>
-            {prestamoEditar && <a href={`/prestamos?cliente=${clienteId}`} class="ml-3 px-6 py-2 bg-gray-500 text-white rounded-lg">✗ Cancelar</a>}
+            <div class="flex gap-3">
+              <button type="submit" class="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all">
+                {prestamoEditar ? "✓ Actualizar préstamo" : "✓ Otorgar préstamo"}
+              </button>
+              {prestamoEditar && (
+                <a href={`/prestamos?cliente=${clienteId}`} class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all">
+                  ✗ Cancelar
+                </a>
+              )}
+            </div>
           </form>
         </div>
 
@@ -256,7 +258,7 @@ const totalPendiente = prestamos?.reduce((sum, p) => sum + p.saldo_pendiente, 0)
                         )}
                       </div>
                       <div class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                        <div>💰 Monto: <strong>S/ {prestamo.monto_prestado.toFixed(2)}</strong></div>
+                        <div>💰 Prestado: <strong>S/ {prestamo.monto_prestado.toFixed(2)}</strong></div>
                         <div>✅ Pagado: <strong class="text-green-600">S/ {(prestamo.monto_prestado - prestamo.saldo_pendiente).toFixed(2)}</strong></div>
                         <div>📊 Saldo: <strong class={prestamo.saldo_pendiente > 0 ? 'text-red-600' : 'text-green-600'}>S/ {prestamo.saldo_pendiente.toFixed(2)}</strong></div>
                         {prestamo.tasa_interes > 0 && <div>📈 Interés: <strong>{prestamo.tasa_interes}%</strong></div>}
