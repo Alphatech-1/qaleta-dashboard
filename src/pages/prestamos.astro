@@ -1,0 +1,376 @@
+---
+export const prerender = false;
+
+import Layout from "../layouts/DashboardLayout.astro";
+import { supabase } from "../lib/supabase";
+
+const clienteId = Astro.url.searchParams.get("cliente");
+const editId = Astro.url.searchParams.get("edit");
+
+let cliente = null;
+let prestamoEditar = null;
+let mensaje = "";
+
+// Obtener cliente si se especifica
+if (clienteId) {
+  const { data } = await supabase.from("clientes").select("*").eq("id", clienteId).single();
+  cliente = data;
+}
+
+// Obtener préstamo para editar
+if (editId) {
+  const { data } = await supabase.from("prestamos").select("*").eq("id", editId).single();
+  prestamoEditar = data;
+}
+
+// Procesar formulario
+if (Astro.request.method === "POST") {
+  const formData = await Astro.request.formData();
+  const deleteId = formData.get("deleteId");
+  const updateId = formData.get("updateId");
+  const pagoId = formData.get("pagoId");
+
+  // Eliminar préstamo
+  if (deleteId) {
+    await supabase.from("prestamos").delete().eq("id", deleteId);
+    return Astro.redirect(`/prestamos?cliente=${clienteId}`);
+  }
+
+  // Registrar pago de préstamo (ESTE SÍ AFECTA CAJA)
+  if (pagoId) {
+    const monto = Number(formData.get("monto"));
+    const fecha = formData.get("fecha")?.toString();
+    const metodoPago = formData.get("metodo_pago")?.toString();
+    
+    // Obtener préstamo actual
+    const { data: prestamo } = await supabase.from("prestamos").select("*").eq("id", pagoId).single();
+    
+    if (prestamo) {
+      const nuevoPagado = prestamo.monto_prestado - prestamo.saldo_pendiente + monto;
+      const nuevoSaldo = prestamo.saldo_pendiente - monto;
+      const nuevoEstado = nuevoSaldo <= 0 ? "pagado" : "parcial";
+      
+      // 1. Insertar pago en pagos_prestamos
+      const { error: pagoError } = await supabase.from("pagos_prestamos").insert([{
+        prestamo_id: pagoId,
+        fecha,
+        monto,
+        metodo_pago: metodoPago
+      }]);
+      
+      if (pagoError) {
+        mensaje = "Error al registrar pago: " + pagoError.message;
+      } else {
+        // 2. Actualizar préstamo
+        await supabase.from("prestamos").update({
+          saldo_pendiente: nuevoSaldo,
+          estado: nuevoEstado
+        }).eq("id", pagoId);
+        
+        // 3. IMPORTANTE: Registrar en VENTAS como ingreso en efectivo (ESTE SÍ AFECTA DASHBOARD)
+        await supabase.from("ventas").insert([{
+          fecha: fecha,
+          producto: `PAGO PRÉSTAMO - ${cliente?.nombre || 'Cliente'}`,
+          cantidad: 1,
+          precio: monto,
+          total: monto,
+          tipo_pago: "efectivo",
+          cliente_id: prestamo.cliente_id,
+          es_pago_prestamo: true
+        }]);
+      }
+    }
+    return Astro.redirect(`/prestamos?cliente=${clienteId}`);
+  }
+
+  // Editar préstamo
+  if (updateId) {
+    const montoPrestado = Number(formData.get("monto_prestado"));
+    const saldoPendiente = montoPrestado - (prestamoEditar?.monto_prestado - prestamoEditar?.saldo_pendiente || 0);
+    
+    await supabase.from("prestamos").update({
+      fecha: formData.get("fecha")?.toString(),
+      monto_prestado: montoPrestado,
+      saldo_pendiente: saldoPendiente,
+      tasa_interes: Number(formData.get("tasa_interes")),
+      fecha_vencimiento: formData.get("fecha_vencimiento") || null,
+      estado: saldoPendiente <= 0 ? "pagado" : saldoPendiente < montoPrestado ? "parcial" : "pendiente"
+    }).eq("id", updateId);
+    return Astro.redirect(`/prestamos?cliente=${clienteId}`);
+  }
+
+  // Crear nuevo préstamo (ESTE SÍ AFECTA CAJA - SALE DINERO)
+  const montoPrestado = Number(formData.get("monto_prestado"));
+  const tasaInteres = Number(formData.get("tasa_interes")) || 0;
+  const fechaVencimiento = formData.get("fecha_vencimiento") || null;
+  
+  const { error: prestamoError } = await supabase.from("prestamos").insert([{
+    cliente_id: clienteId,
+    fecha: formData.get("fecha")?.toString(),
+    monto_prestado: montoPrestado,
+    saldo_pendiente: montoPrestado,
+    tasa_interes: tasaInteres,
+    fecha_vencimiento: fechaVencimiento,
+    estado: "pendiente"
+  }]);
+  
+  if (prestamoError) {
+    mensaje = "Error al crear préstamo: " + prestamoError.message;
+  } else {
+    // IMPORTANTE: Registrar un GASTO (salida de dinero) ya que el préstamo es dinero que sale de caja
+    await supabase.from("gastos").insert([{
+      fecha: formData.get("fecha")?.toString(),
+      categoria: "Prestamos",
+      descripcion: `Préstamo otorgado a ${cliente?.nombre}`,
+      monto: montoPrestado
+    }]);
+  }
+  return Astro.redirect(`/prestamos?cliente=${clienteId}`);
+}
+
+// Obtener préstamos del cliente
+const { data: prestamos } = clienteId ? await supabase
+  .from("prestamos")
+  .select("*")
+  .eq("cliente_id", clienteId)
+  .order("fecha", { ascending: false }) : { data: [] };
+
+// Obtener pagos de préstamos
+const { data: pagos } = clienteId ? await supabase
+  .from("pagos_prestamos")
+  .select("*, prestamos(*)")
+  .in("prestamo_id", prestamos?.map(p => p.id) || [])
+  .order("fecha", { ascending: false }) : { data: [] };
+
+// Calcular totales
+const totalPrestado = prestamos?.reduce((sum, p) => sum + p.monto_prestado, 0) || 0;
+const totalPagado = prestamos?.reduce((sum, p) => sum + (p.monto_prestado - p.saldo_pendiente), 0) || 0;
+const totalPendiente = prestamos?.reduce((sum, p) => sum + p.saldo_pendiente, 0) || 0;
+---
+
+<Layout title={cliente ? `Préstamos - ${cliente.nombre}` : "Préstamos"}>
+  <div class="space-y-6 sm:space-y-8">
+    {/* Header */}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2">
+          <a href="/clientes" class="text-blue-600 hover:text-blue-700">← Volver</a>
+          <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">🏦 Préstamos</h1>
+        </div>
+        {cliente && (
+          <p class="text-gray-600 mt-1">Cliente: <span class="font-semibold">{cliente.nombre}</span></p>
+        )}
+      </div>
+      {cliente && (
+        <div class="bg-purple-50 rounded-xl p-4">
+          <p class="text-sm text-gray-600">Deuda total</p>
+          <p class="text-2xl font-bold text-purple-600">S/ {totalPendiente.toFixed(2)}</p>
+        </div>
+      )}
+    </div>
+
+    {/* Mensaje de error */}
+    {mensaje && (
+      <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+        <p class="text-red-700">{mensaje}</p>
+      </div>
+    )}
+
+    {cliente ? (
+      <>
+        {/* Formulario nuevo préstamo */}
+        <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft p-4 sm:p-6 border border-gray-100">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
+              <span class="text-white text-xl">💸</span>
+            </div>
+            <h2 class="text-xl font-bold text-gray-800">{prestamoEditar ? "Editar préstamo" : "Nuevo préstamo"}</h2>
+          </div>
+
+          <form method="POST" class="space-y-4">
+            {prestamoEditar && <input type="hidden" name="updateId" value={prestamoEditar.id} />}
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">📅 Fecha</label>
+                <input type="date" name="fecha" required value={prestamoEditar?.fecha} class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">💰 Monto prestado</label>
+                <div class="relative">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">S/</span>
+                  <input type="number" step="0.01" name="monto_prestado" required value={prestamoEditar?.monto_prestado} class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">📈 Tasa interés (%)</label>
+                <input type="number" step="0.01" name="tasa_interes" value={prestamoEditar?.tasa_interes || 0} class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">⏰ Fecha vencimiento</label>
+                <input type="date" name="fecha_vencimiento" value={prestamoEditar?.fecha_vencimiento} class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+              </div>
+            </div>
+            
+            <div class="bg-yellow-50 p-3 rounded-lg">
+              <p class="text-sm text-yellow-800 flex items-center gap-2">
+                <span>⚠️</span> 
+                Este préstamo DISMINUIRÁ el efectivo en caja al momento de crearlo
+              </p>
+            </div>
+            
+            <button type="submit" class="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all">
+              {prestamoEditar ? "✓ Actualizar préstamo" : "✓ Otorgar préstamo"}
+            </button>
+            {prestamoEditar && <a href={`/prestamos?cliente=${clienteId}`} class="ml-3 px-6 py-2 bg-gray-500 text-white rounded-lg">✗ Cancelar</a>}
+          </form>
+        </div>
+
+        {/* Lista de préstamos */}
+        <div class="bg-white rounded-xl sm:rounded-2xl shadow-soft border border-gray-100 overflow-hidden">
+          <div class="px-4 sm:px-6 py-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800">📋 Historial de préstamos</h2>
+          </div>
+
+          {prestamos?.length === 0 ? (
+            <div class="p-8 text-center text-gray-500">
+              <div class="text-6xl mb-3">🏦</div>
+              <p>No hay préstamos registrados para este cliente</p>
+            </div>
+          ) : (
+            <div class="divide-y divide-gray-100">
+              {prestamos?.map((prestamo) => (
+                <div key={prestamo.id} class="p-5 hover:bg-gray-50 transition-colors">
+                  <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-sm text-gray-500">{new Date(prestamo.fecha).toLocaleDateString('es-PE')}</span>
+                        <span class={`px-2 py-1 text-xs rounded-full ${
+                          prestamo.estado === 'pagado' ? 'bg-green-100 text-green-700' :
+                          prestamo.estado === 'parcial' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {prestamo.estado === 'pagado' ? '✓ Pagado' : prestamo.estado === 'parcial' ? '⚠ Parcial' : '❌ Pendiente'}
+                        </span>
+                        {prestamo.fecha_vencimiento && new Date(prestamo.fecha_vencimiento) < new Date() && prestamo.estado !== 'pagado' && (
+                          <span class="px-2 py-1 text-xs rounded-full bg-red-200 text-red-800">📅 Vencido</span>
+                        )}
+                      </div>
+                      <div class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                        <div>💰 Monto: <strong>S/ {prestamo.monto_prestado.toFixed(2)}</strong></div>
+                        <div>✅ Pagado: <strong class="text-green-600">S/ {(prestamo.monto_prestado - prestamo.saldo_pendiente).toFixed(2)}</strong></div>
+                        <div>📊 Saldo: <strong class={prestamo.saldo_pendiente > 0 ? 'text-red-600' : 'text-green-600'}>S/ {prestamo.saldo_pendiente.toFixed(2)}</strong></div>
+                        {prestamo.tasa_interes > 0 && <div>📈 Interés: <strong>{prestamo.tasa_interes}%</strong></div>}
+                      </div>
+                    </div>
+                    <div class="flex gap-2">
+                      {prestamo.saldo_pendiente > 0 && (
+                        <button onclick={`document.getElementById('pagoModal-${prestamo.id}').classList.remove('hidden')`} class="px-4 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600">
+                          💵 Registrar pago
+                        </button>
+                      )}
+                      <a href={`/prestamos?cliente=${clienteId}&edit=${prestamo.id}`} class="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600">
+                        ✏️ Editar
+                      </a>
+                      <form method="POST" onsubmit="return confirm('¿Eliminar este préstamo? Esto afectará los registros financieros.')">
+                        <input type="hidden" name="deleteId" value={prestamo.id} />
+                        <button type="submit" class="px-4 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600">
+                          🗑️ Eliminar
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
+                  {/* Mostrar pagos realizados */}
+                  {pagos?.filter(p => p.prestamo_id === prestamo.id).length > 0 && (
+                    <div class="mt-4 ml-4 pl-4 border-l-2 border-gray-200">
+                      <p class="text-xs font-semibold text-gray-500 mb-2">📝 Historial de pagos:</p>
+                      {pagos.filter(p => p.prestamo_id === prestamo.id).map(pago => (
+                        <div key={pago.id} class="text-xs text-gray-600 flex items-center gap-3 mb-1">
+                          <span>📅 {new Date(pago.fecha).toLocaleDateString('es-PE')}</span>
+                          <span>💰 S/ {pago.monto.toFixed(2)}</span>
+                          <span class="capitalize">💳 {pago.metodo_pago}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Modal de pago */}
+                  <div id={`pagoModal-${prestamo.id}`} class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-xl p-6 w-full max-w-md">
+                      <h3 class="text-xl font-bold mb-4">Registrar pago de préstamo</h3>
+                      <p class="text-sm text-gray-600 mb-4">
+                        Monto prestado: <strong>S/ {prestamo.monto_prestado.toFixed(2)}</strong><br/>
+                        Saldo pendiente: <strong class="text-red-600">S/ {prestamo.saldo_pendiente.toFixed(2)}</strong>
+                      </p>
+                      <form method="POST">
+                        <input type="hidden" name="pagoId" value={prestamo.id} />
+                        <div class="space-y-4">
+                          <div>
+                            <label class="block text-sm font-semibold mb-2">📅 Fecha</label>
+                            <input type="date" name="fecha" required class="w-full px-4 py-2 border rounded-lg" />
+                          </div>
+                          <div>
+                            <label class="block text-sm font-semibold mb-2">💵 Monto a pagar</label>
+                            <input type="number" step="0.01" name="monto" max={prestamo.saldo_pendiente} required class="w-full px-4 py-2 border rounded-lg" />
+                          </div>
+                          <div>
+                            <label class="block text-sm font-semibold mb-2">💳 Método de pago</label>
+                            <select name="metodo_pago" class="w-full px-4 py-2 border rounded-lg">
+                              <option value="efectivo">Efectivo</option>
+                              <option value="yape">Yape</option>
+                              <option value="plin">Plin</option>
+                              <option value="transferencia">Transferencia</option>
+                            </select>
+                          </div>
+                          <div class="bg-green-50 p-3 rounded-lg">
+                            <p class="text-xs text-green-800">
+                              💡 Este pago se registrará como ingreso en el dashboard
+                            </p>
+                          </div>
+                          <div class="flex gap-3">
+                            <button type="submit" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg">Registrar pago</button>
+                            <button type="button" onclick={`document.getElementById('pagoModal-${prestamo.id}').classList.add('hidden')`} class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg">Cancelar</button>
+                          </div>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Resumen de préstamos */}
+        {prestamos && prestamos.length > 0 && (
+          <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-200">
+            <h3 class="font-bold text-purple-800 mb-3">📊 Resumen de préstamos</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <p class="text-xs text-purple-600">Total prestado</p>
+                <p class="text-xl font-bold text-purple-700">S/ {totalPrestado.toFixed(2)}</p>
+              </div>
+              <div>
+                <p class="text-xs text-purple-600">Total pagado</p>
+                <p class="text-xl font-bold text-green-700">S/ {totalPagado.toFixed(2)}</p>
+              </div>
+              <div>
+                <p class="text-xs text-purple-600">Saldo pendiente</p>
+                <p class="text-xl font-bold text-red-600">S/ {totalPendiente.toFixed(2)}</p>
+              </div>
+              <div>
+                <p class="text-xs text-purple-600">% recuperado</p>
+                <p class="text-xl font-bold text-purple-700">{totalPrestado > 0 ? ((totalPagado / totalPrestado) * 100).toFixed(0) : 0}%</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    ) : (
+      <div class="bg-yellow-50 border-l-4 border-yellow-500 p-6 rounded-lg">
+        <p class="text-yellow-800">Selecciona un cliente para gestionar sus préstamos</p>
+        <a href="/clientes" class="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">Ver clientes →</a>
+      </div>
+    )}
+  </div>
+</Layout>
