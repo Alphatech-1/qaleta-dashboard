@@ -4,41 +4,6 @@
 import Layout from "../layouts/DashboardLayout.astro";
 import { supabase } from "../lib/supabase";
 
-// ============================================
-// CÓDIGO DE DEPURACIÓN - ELIMINAR DESPUÉS
-// ============================================
-console.log("=== INICIO DEPURACIÓN DASHBOARD ===");
-
-// Prueba 1: Consulta más simple posible
-const { data: pruebaSimple, error: errorSimple } = await supabase
-  .from("ventas")
-  .select("*");
-
-console.log("PRUEBA SIMPLE - ventas:", {
-  cantidad: pruebaSimple?.length || 0,
-  primeros: pruebaSimple?.slice(0, 2),
-  error: errorSimple
-});
-
-// Prueba 2: Verificar si hay algún registro en ventas
-const { count: totalVentas, error: countError } = await supabase
-  .from("ventas")
-  .select("*", { count: 'exact', head: true });
-
-console.log("TOTAL DE VENTAS en tabla:", totalVentas);
-console.log("Error al contar:", countError);
-
-// Prueba 3: Ver qué está pasando con tus consultas originales
-console.log("CONSULTAS ORIGINALES:");
-console.log("- ventasEfectivo:", ventasEfectivo?.length || 0, "registros");
-console.log("- gastosReales:", gastosReales?.length || 0, "registros");
-console.log("- pagosRecibidos:", pagosRecibidos?.length || 0, "registros");
-console.log("- prestamosPendientes:", prestamosPendientes?.length || 0, "registros");
-
-// Si hay errores, mostrarlos
-if (errorSimple) console.error("ERROR EN PRUEBA SIMPLE:", errorSimple);
-// ============================================
-
 const hoy = new Date().toISOString().split("T")[0];
 const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
 
